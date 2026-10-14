@@ -1,0 +1,171 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { apiRequest } from "@/lib/api";
+
+export default function SignupPage() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+      <div className="w-full max-w-md">
+        <Link
+          href="/"
+          className="mb-10 inline-flex items-center gap-2 text-sm font-semibold tracking-tight"
+        >
+          <span className="flex size-9 items-center justify-center rounded-xl bg-blue-600 text-white">
+            P
+          </span>
+          Productivity
+        </Link>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-10">
+          <div className="mb-8">
+            <p className="mb-3 text-sm font-medium text-blue-600 dark:text-blue-400">
+              GET STARTED
+            </p>
+            <h1 className="text-3xl font-semibold tracking-tight">
+              Create your account
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
+              One workspace for everything you want to accomplish.
+            </p>
+          </div>
+
+          <form
+            className="space-y-5"
+            onSubmit={async (event) => {
+                event.preventDefault();
+                setError("");
+                setSuccess("");
+                setIsSubmitting(true);
+
+                try {
+                    const result = await apiRequest<{
+                    status: string;
+                    message: string;
+                    }>("/auth/signup", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        name: name.trim(),
+                        email: email.trim(),
+                        password,
+                    }),
+                    });
+
+                    setSuccess(result.message || "Account created successfully.");
+                    setName("");
+                    setEmail("");
+                    setPassword("");
+                } catch (err) {
+                    setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Unable to create your account. Please try again.",
+                    );
+                } finally {
+                    setIsSubmitting(false);
+                }
+            }}
+          >
+            <div>
+              <label htmlFor="name" className="mb-2 block text-sm font-medium">
+                Full name
+              </label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                autoComplete="name"
+                required
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Your name"
+                className="w-full rounded-xl border border-gray-300 bg-transparent px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="email" className="mb-2 block text-sm font-medium">
+                Email address
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-xl border border-gray-300 bg-transparent px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className="mb-2 block text-sm font-medium">
+                Password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                maxLength={72}
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="At least 8 characters"
+                className="w-full rounded-xl border border-gray-300 bg-transparent px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700"
+              />
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Use between 8 and 72 characters.
+              </p>
+            </div>
+
+            {error && (
+                <p role="alert" className="text-sm text-red-500">
+                    {error}
+                </p>
+            )}
+
+            {success && (
+                <p role="status" className="text-sm text-green-600 dark:text-green-400">
+                    {success}
+                </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+            >
+              {isSubmitting ? "Creating account..." : "Create account"}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            Already have an account?{" "}
+            <Link
+              href="/auth/login"
+              className="font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400"
+            >
+              Log in
+            </Link>
+          </p>
+        </div>
+
+        <p className="mt-6 text-center text-xs text-gray-500 dark:text-gray-500">
+          Your personal workspace, built around you.
+        </p>
+      </div>
+    </main>
+  );
+}
