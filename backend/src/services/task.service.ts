@@ -6,6 +6,7 @@ import {
   validateTaskInput,
   type TaskInput,
 } from "./task-validation.service.js";
+import Project from "../models/Project.js";
 
 const MAX_TASK_DEPTH = 5;
 
@@ -85,6 +86,21 @@ export async function createTask(
 
   if (!space) {
     throw new Error("Space not found or access denied.");
+  }
+
+  if (validated.projectId) {
+    const project = await Project.findOne({
+      _id: validated.projectId,
+      ownerId,
+      spaceId: space._id,
+      deletedAt: null,
+    }).select("_id");
+
+    if (!project) {
+      throw new Error(
+        "Project not found in this space or access denied.",
+      );
+    }
   }
 
   if (validated.parentTaskId) {
@@ -274,6 +290,26 @@ export async function updateTask(
     validated.spaceId !== task.spaceId.toString()
   ) {
     throw new Error("Moving tasks between spaces is not supported.");
+  }
+
+  const nextProjectId =
+    validated.projectId !== undefined
+      ? validated.projectId
+      : task.projectId?.toString() ?? null;
+
+  if (nextProjectId) {
+    const project = await Project.findOne({
+      _id: nextProjectId,
+      ownerId,
+      spaceId: task.spaceId,
+      deletedAt: null,
+    }).select("_id");
+
+    if (!project) {
+      throw new Error(
+        "Project not found in this space or access denied.",
+      );
+    }
   }
 
   const nextParentTaskId =

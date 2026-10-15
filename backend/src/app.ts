@@ -7,6 +7,7 @@ import authRoutes from "./routes/auth.routes.js";
 import taskRoutes from "./routes/task.routes.js";
 import spaceRoutes from "./routes/space.routes.js";
 import session from "express-session";
+import projectRoutes from "./routes/project.routes.js";
 
 const app = express();
 
@@ -44,5 +45,6 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/spaces", spaceRoutes);
+app.use("/api/projects", projectRoutes);
 
 export default app;

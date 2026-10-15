@@ -187,6 +187,7 @@ export async function updateTaskController(
       "A task cannot be moved under its own descendant.",
       "A cycle was detected in the task hierarchy.",
       "Moving tasks between spaces is not supported.",
+      "Project not found in this space or access denied.",
     ];
 
     const isBadRequest =
