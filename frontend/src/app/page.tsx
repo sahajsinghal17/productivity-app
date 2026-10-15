@@ -17,6 +17,9 @@ import {
   X,
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
+import type { Task } from "@/types/task";
+import { useTasks } from "@/hooks/use-tasks";
+import { TaskList } from "@/components/tasks/TaskList";
 
 type User = {
   id: string;
@@ -28,18 +31,6 @@ type Space = {
   _id: string;
   name: string;
   isDefault: boolean;
-};
-
-type Task = {
-  _id: string;
-  title: string;
-  description?: string;
-  status: "todo" | "in_progress" | "done" | "cancelled";
-  priority: "low" | "medium" | "high" | "urgent";
-  spaceId: string;
-  dueDate?: string | null;
-  createdAt: string;
-  updatedAt: string;
 };
 
 const navigation = [
@@ -63,10 +54,23 @@ export default function Home() {
   const [authError, setAuthError] = useState("");
   const [spaceError, setSpaceError] = useState("");
   const [logoutError, setLogoutError] = useState("");
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
-  const [taskError, setTaskError] = useState("");
-  const [isUpdatingTaskId, setIsUpdatingTaskId] = useState<string | null>(null);
+  const {
+    tasks,
+    setTasks,
+    isLoadingTasks,
+    taskError,
+    isUpdatingTaskId,
+    handleToggleTask,
+    handleDeleteTask,
+  } = useTasks(activeSpaceId);
+
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState<
+    "low" | "medium" | "high" | "urgent"
+  >("medium");
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [quickAddError, setQuickAddError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -129,50 +133,6 @@ export default function Home() {
     };
   }, [router]);
 
-  useEffect(() => {
-    if (!activeSpaceId) {
-      setTasks([]);
-      return;
-    }
-
-    let isActive = true;
-
-    async function loadTasks() {
-      setIsLoadingTasks(true);
-      setTaskError("");
-
-      try {
-        const response = await apiRequest<{
-          status: string;
-          data: { tasks: Task[] };
-        }>(
-          `/tasks?spaceId=${encodeURIComponent(activeSpaceId)}&parentTaskId=null&limit=100`,
-          { cache: "no-store" },
-        );
-
-        if (isActive) {
-          setTasks(response.data.tasks);
-        }
-      } catch (error) {
-        if (isActive) {
-          setTaskError(
-            error instanceof Error ? error.message : "Unable to load tasks.",
-          );
-        }
-      } finally {
-        if (isActive) {
-          setIsLoadingTasks(false);
-        }
-      }
-    }
-
-    void loadTasks();
-
-    return () => {
-      isActive = false;
-    };
-  }, [activeSpaceId]);
-
   async function handleLogout() {
     setIsLoggingOut(true);
     setLogoutError("");
@@ -190,52 +150,50 @@ export default function Home() {
     }
   }
 
+  async function handleCreateTask(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-  async function handleToggleTask(task: Task) {
-    if (isUpdatingTaskId) return;
+    const title = newTaskTitle.trim();
 
-    const previousStatus = task.status;
-    const nextStatus = previousStatus === "done" ? "todo" : "done";
+    if (!title) {
+      setQuickAddError("Task title is required.");
+      return;
+    }
 
-    setIsUpdatingTaskId(task._id);
-    setTaskError("");
+    if (!activeSpaceId) {
+      setQuickAddError("Please select a space before creating a task.");
+      return;
+    }
 
-    // Update the UI immediately.
-    setTasks((currentTasks) =>
-      currentTasks.map((currentTask) =>
-        currentTask._id === task._id
-          ? { ...currentTask, status: nextStatus }
-          : currentTask,
-      ),
-    );
+    setQuickAddError("");
+    setIsCreatingTask(true);
 
     try {
-      await apiRequest<{ status: string; data: { task: Task } }>(
-        `/tasks/${task._id}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ status: nextStatus }),
-        },
-      );
-    } catch (error) {
-      // Restore the previous status if the server rejects the update.
-      setTasks((currentTasks) =>
-        currentTasks.map((currentTask) =>
-          currentTask._id === task._id
-            ? { ...currentTask, status: previousStatus }
-            : currentTask,
-        ),
-      );
+      const response = await apiRequest<{
+        status: string;
+        data: { task: Task };
+      }>("/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          spaceId: activeSpaceId,
+          priority: newTaskPriority,
+        }),
+      });
 
-      setTaskError(
-        error instanceof Error
-          ? error.message
-          : "Unable to update the task. Please try again.",
+      setTasks((currentTasks) => [response.data.task, ...currentTasks]);
+      setNewTaskTitle("");
+      setNewTaskPriority("medium");
+      setIsQuickAddOpen(false);
+    } catch (error) {
+      setQuickAddError(
+        error instanceof Error ? error.message : "Unable to create the task.",
       );
     } finally {
-      setIsUpdatingTaskId(null);
+      setIsCreatingTask(false);
     }
   }
+
 
   if (isCheckingAuth) {
     return (
@@ -445,21 +403,126 @@ export default function Home() {
             >
               <Search size={18} />
             </button>
+
             <button
               type="button"
               onClick={() => {
                 setIsMobileNavOpen(false);
-                document.getElementById("workspace-content")?.scrollIntoView({
-                  behavior: "smooth",
-                });
+                setQuickAddError("");
+                setIsQuickAddOpen(true);
               }}
               className="flex items-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-sm font-medium text-white hover:bg-accent-hover"
             >
               <Plus size={17} />
               <span className="hidden sm:inline">Quick add</span>
             </button>
+
           </div>
         </header>
+
+        {isQuickAddOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="quick-add-title"
+              className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-xl"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <h2 id="quick-add-title" className="text-lg font-semibold">
+                  Create a task
+                </h2>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsQuickAddOpen(false);
+                    setNewTaskTitle("");
+                  }}
+                  aria-label="Close Quick Add"
+                  className="rounded-lg p-2 text-muted hover:bg-surface-secondary"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form className="mt-5 space-y-4" onSubmit={handleCreateTask}>
+                <div>
+                  <label
+                    htmlFor="quick-add-task-title"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    Task title
+                  </label>
+
+                  <input
+                    id="quick-add-task-title"
+                    autoFocus
+                    required
+                    maxLength={200}
+                    value={newTaskTitle}
+                    onChange={(event) => setNewTaskTitle(event.target.value)}
+                    placeholder="What needs to get done?"
+                    className="w-full rounded-xl border border-border bg-surface px-3 py-3 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="quick-add-task-priority"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    Priority
+                  </label>
+
+                  <select
+                    id="quick-add-task-priority"
+                    value={newTaskPriority}
+                    onChange={(event) =>
+                      setNewTaskPriority(
+                        event.target.value as "low" | "medium" | "high" | "urgent",
+                      )
+                    }
+                    className="w-full rounded-xl border border-border bg-surface px-3 py-3 text-sm outline-none focus:border-accent"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+
+                {quickAddError && (
+                  <p role="alert" className="text-sm text-red-500">
+                    {quickAddError}
+                  </p>
+                )}
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsQuickAddOpen(false);
+                      setNewTaskTitle("");
+                    }}
+                    className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium hover:bg-surface-secondary"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={isCreatingTask}
+                    className="rounded-xl bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-hover disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isCreatingTask ? "Creating…" : "Create task"}
+                  </button>
+
+                </div>
+              </form>
+            </section>
+          </div>
+        )}
 
         <main
           id="workspace-content"
@@ -494,92 +557,26 @@ export default function Home() {
               </div>
             </div>
 
-            {isLoadingTasks ? (
-              <div className="py-12 text-center text-sm text-muted">
-                Loading your tasks…
-              </div>
-            ) : taskError ? (
-              <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
-                <p className="text-sm text-red-500">{taskError}</p>
-              </div>
-            ) : tasks.length === 0 ? (
-              <div className="mt-6 rounded-xl border border-dashed border-border px-5 py-12 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10 text-accent">
-                  <CheckSquare size={22} />
+              {isLoadingTasks ? (
+                <div className="py-12 text-center text-sm text-muted">
+                  Loading your tasks…
                 </div>
-                <h3 className="mt-4 text-base font-semibold">No tasks yet</h3>
-                <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted">
-                  This space is ready for your tasks. We’ll add task creation next.
-                </p>
-              </div>
-            ) : (
-              <div className="mt-6 divide-y divide-border">
-                {tasks.map((task) => (
-                  <div key={task._id} className="flex items-start gap-3 py-4">
-                    <button
-                      type="button"
-                      aria-label={
-                        task.status === "done"
-                          ? `Reopen task: ${task.title}`
-                          : `Complete task: ${task.title}`
-                      }
-                      title={task.status === "done" ? "Reopen task" : "Complete task"}
-                      disabled={isUpdatingTaskId === task._id}
-                      onClick={() => void handleToggleTask(task)}
-                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors disabled:cursor-wait disabled:opacity-60 ${
-                        task.status === "done"
-                          ? "border-accent bg-accent text-white"
-                          : "border-border hover:border-accent"
-                      }`}
-                    >
-                      {task.status === "done" && <CheckSquare size={13} />}
-                    </button>
+              ) : taskError ? (
+                <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+                  <p className="text-sm text-red-500">{taskError}</p>
+                </div>
+              ) : (
+                <div className="mt-6 divide-y divide-border">
+                  <TaskList
+                    tasks={tasks}
+                    isUpdatingTaskId={isUpdatingTaskId}
+                    onToggleTask={(task) => void handleToggleTask(task)}
+                    onDeleteTask={(task) => void handleDeleteTask(task)}
+                    onAddTask={() => setIsQuickAddOpen(true)}
+                  />
+                </div>
+              )}
 
-
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={`break-words text-sm font-medium ${
-                          task.status === "done" ? "text-muted line-through" : ""
-                        }`}
-                      >
-                        {task.title}
-                      </p>
-
-                      {task.description && (
-                        <p className="mt-1 whitespace-pre-wrap text-sm text-muted">
-                          {task.description}
-                        </p>
-                      )}
-
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span
-                          className={`rounded-md px-2 py-1 text-xs ${
-                            task.priority === "urgent"
-                              ? "bg-red-500/10 text-red-500"
-                              : task.priority === "high"
-                                ? "bg-orange-500/10 text-orange-500"
-                                : task.priority === "medium"
-                                  ? "bg-accent/10 text-accent"
-                                  : "bg-surface-secondary text-muted"
-                          }`}
-                        >
-                          {task.priority.charAt(0).toUpperCase() +
-                            task.priority.slice(1)}
-                        </span>
-
-                        {task.status === "in_progress" && (
-                          <span className="text-xs text-muted">In progress</span>
-                        )}
-
-                        {task.status === "cancelled" && (
-                          <span className="text-xs text-muted">Cancelled</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </section>
         </main>
 
