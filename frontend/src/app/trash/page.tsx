@@ -289,6 +289,16 @@ export default function TrashPage() {
       logoutError={logoutError}
       onLogout={handleLogout}
       onQuickAdd={() => router.push("/")}
+      onSpaceCreated={(createdSpace) => {
+        setSpaces((currentSpaces) =>
+            [...currentSpaces, createdSpace].sort(
+            (a, b) =>
+                Number(b.isDefault) - Number(a.isDefault) ||
+                a.name.localeCompare(b.name),
+            ),
+        );
+        setActiveSpaceId(createdSpace._id);
+      }}
     >
       <main
         id="workspace-content"

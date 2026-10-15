@@ -212,6 +212,16 @@ export default function Home() {
         setQuickAddError("");
         setIsQuickAddOpen(true);
       }}
+      onSpaceCreated={(createdSpace) => {
+        setSpaces((currentSpaces) =>
+            [...currentSpaces, createdSpace].sort(
+            (a, b) =>
+                Number(b.isDefault) - Number(a.isDefault) ||
+                a.name.localeCompare(b.name),
+            ),
+        );
+        setActiveSpaceId(createdSpace._id);
+      }}
     >
       {isQuickAddOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

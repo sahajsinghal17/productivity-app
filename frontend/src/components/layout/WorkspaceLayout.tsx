@@ -11,13 +11,14 @@ import {
   ChevronDown,
   FolderKanban,
   Goal,
-  LayoutDashboard,
   LogOut,
   Menu,
+  Plus,
   Search,
   Settings2,
   X,
 } from "lucide-react";
+import { apiRequest } from "@/lib/api";
 
 export type WorkspaceUser = {
   id: string;
@@ -43,10 +44,10 @@ type WorkspaceLayoutProps = {
   onLogout: () => void;
   children: ReactNode;
   onQuickAdd?: () => void;
+  onSpaceCreated?: (space: WorkspaceSpace) => void;
 };
 
 const navigation = [
-  { label: "Overview", href: "/overview", icon: LayoutDashboard },
   { label: "My Day", href: "/", icon: CheckSquare },
   { label: "Calendar", href: "/calendar", icon: CalendarDays },
   { label: "Projects", href: "/projects", icon: FolderKanban },
@@ -65,10 +66,51 @@ export function WorkspaceLayout({
   onLogout,
   children,
   onQuickAdd,
+  onSpaceCreated,
 }: WorkspaceLayoutProps) {
   const pathname = usePathname();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isCreateSpaceOpen, setIsCreateSpaceOpen] = useState(false);
+  const [newSpaceName, setNewSpaceName] = useState("");
+  const [isCreatingSpace, setIsCreatingSpace] = useState(false);
+  const [createSpaceError, setCreateSpaceError] = useState("");
   const activeSpace = spaces.find((space) => space._id === activeSpaceId);
+
+  async function handleCreateSpace(
+    event: React.FormEvent<HTMLFormElement>,
+    ) {
+    event.preventDefault();
+
+    const name = newSpaceName.trim();
+
+    if (!name) {
+        setCreateSpaceError("Space name is required.");
+        return;
+    }
+
+    setIsCreatingSpace(true);
+    setCreateSpaceError("");
+
+    try {
+        const response = await apiRequest<{
+        status: string;
+        data: { space: WorkspaceSpace };
+        }>("/spaces", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+        });
+
+        onSpaceCreated?.(response.data.space);
+        setNewSpaceName("");
+        setIsCreateSpaceOpen(false);
+    } catch (error) {
+        setCreateSpaceError(
+        error instanceof Error ? error.message : "Unable to create space.",
+        );
+    } finally {
+        setIsCreatingSpace(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -142,6 +184,19 @@ export function WorkspaceLayout({
             </p>
           )}
         </div>
+
+        <button
+            type="button"
+            onClick={() => {
+                setCreateSpaceError("");
+                setNewSpaceName("");
+                setIsCreateSpaceOpen(true);
+            }}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            >
+            <Plus className="h-4 w-4" />
+            Create space
+        </button>
 
         <nav aria-label="Main navigation" className="flex-1 space-y-1 p-3">
           <p className="px-3 pb-2 pt-3 text-xs font-medium uppercase tracking-wider text-muted">
@@ -276,6 +331,75 @@ export function WorkspaceLayout({
             )}
           </div>
         </header>
+
+        {isCreateSpaceOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+                <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="create-space-title"
+                className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-xl"
+                >
+                <div className="mb-5 flex items-center justify-between">
+                    <h2 id="create-space-title" className="text-lg font-semibold">
+                    Create a space
+                    </h2>
+                    <button
+                    type="button"
+                    aria-label="Close dialog"
+                    onClick={() => setIsCreateSpaceOpen(false)}
+                    disabled={isCreatingSpace}
+                    className="rounded-lg p-2 text-muted hover:bg-surface-secondary"
+                    >
+                    <X size={18} />
+                    </button>
+                </div>
+
+                <form onSubmit={handleCreateSpace}>
+                    <label
+                    htmlFor="new-space-name"
+                    className="mb-2 block text-sm font-medium"
+                    >
+                    Space name
+                    </label>
+                    <input
+                    id="new-space-name"
+                    autoFocus
+                    required
+                    maxLength={100}
+                    value={newSpaceName}
+                    onChange={(event) => setNewSpaceName(event.target.value)}
+                    placeholder="e.g. Study, Personal, Work"
+                    className="w-full rounded-xl border border-border bg-surface-secondary px-3 py-2.5 text-sm outline-none focus:border-accent"
+                    />
+
+                    {createSpaceError && (
+                    <p role="alert" className="mt-2 text-sm text-red-500">
+                        {createSpaceError}
+                    </p>
+                    )}
+
+                    <div className="mt-6 flex justify-end gap-3">
+                    <button
+                        type="button"
+                        onClick={() => setIsCreateSpaceOpen(false)}
+                        disabled={isCreatingSpace}
+                        className="rounded-xl border border-border px-4 py-2 text-sm font-medium hover:bg-surface-secondary disabled:opacity-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={isCreatingSpace || !newSpaceName.trim()}
+                        className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                    >
+                        {isCreatingSpace ? "Creating…" : "Create space"}
+                    </button>
+                    </div>
+                </form>
+                </div>
+            </div>
+        )}
 
         {children}
       </div>

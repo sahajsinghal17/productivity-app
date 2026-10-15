@@ -10,6 +10,8 @@ export type Task = {
   priority: TaskPriority;
   spaceId: string;
   dueDate?: string | null;
+  scheduledStart?: string | null;
+  scheduledEnd?: string | null;
   createdAt: string;
   updatedAt: string;
 };
