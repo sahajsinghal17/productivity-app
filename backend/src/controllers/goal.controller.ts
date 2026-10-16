@@ -8,6 +8,7 @@ import {
   deleteGoal,
   listDeletedGoals,
   restoreGoal,
+  permanentlyDeleteGoal,
 } from "../services/goal.service.js";
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -253,6 +254,28 @@ export async function restoreGoalController(
         "Goal's space not found or access denied.",
         "Restore the parent goal before restoring this goal.",
       ],
+    });
+  }
+}
+
+export async function permanentlyDeleteGoalController(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    const goal = await permanentlyDeleteGoal(
+      req.session.userId!,
+      req.params.goalId as string,
+    );
+
+    res.status(200).json({
+      status: "success",
+      message: "Goal permanently deleted.",
+      data: { goal },
+    });
+  } catch (error) {
+    sendServiceError(res, error, "Unable to permanently delete goal.", {
+      notFound: ["Deleted goal not found or access denied."],
     });
   }
 }

@@ -9,6 +9,7 @@ import {
   deleteGoalController,
   listDeletedGoalsController,
   restoreGoalController,
+  permanentlyDeleteGoalController,
 } from "../controllers/goal.controller.js";
 
 const router = Router();
@@ -24,5 +25,9 @@ router.get("/:goalId/progress", getGoalProgressController);
 router.patch("/:goalId", updateGoalController);
 router.delete("/:goalId", deleteGoalController);
 router.post("/:goalId/restore", restoreGoalController);
+router.delete(
+  "/:goalId/permanent",
+  permanentlyDeleteGoalController,
+);
 
 export default router;

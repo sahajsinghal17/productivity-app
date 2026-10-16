@@ -26,6 +26,22 @@ type SpacesResponse = {
   data: { spaces: WorkspaceSpace[] };
 };
 
+type DeletedGoal = {
+  _id: string;
+  name: string;
+  description: string;
+  status: "active" | "completed" | "on_hold" | "cancelled";
+  color: string;
+  spaceId: string;
+  deletedAt?: string | null;
+  updatedAt: string;
+};
+
+type GoalsTrashResponse = {
+  status: string;
+  data: { goals: DeletedGoal[] };
+};
+
 export default function TrashPage() {
   const router = useRouter();
 
@@ -38,6 +54,8 @@ export default function TrashPage() {
   const [logoutError, setLogoutError] = useState("");
 
   const [tasks, setTasks] = useState<DeletedTask[]>([]);
+  const [goals, setGoals] = useState<DeletedGoal[]>([]);
+  const [busyGoalId, setBusyGoalId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
@@ -116,12 +134,28 @@ export default function TrashPage() {
     setError("");
 
     try {
-      const response = await apiRequest<TrashResponse>(
+      const [tasksResult, goalsResult] = await Promise.allSettled([
+      apiRequest<TrashResponse>(
         `/tasks/trash?spaceId=${encodeURIComponent(activeSpaceId)}`,
         { cache: "no-store" },
-      );
+      ),
+      apiRequest<GoalsTrashResponse>(
+        `/goals/trash?spaceId=${encodeURIComponent(activeSpaceId)}`,
+        { cache: "no-store" },
+      ),
+      ]);
 
-      setTasks(response.data.tasks);
+      if (tasksResult.status === "fulfilled") {
+        setTasks(tasksResult.value.data.tasks);
+      } else {
+        throw tasksResult.reason;
+      }
+
+      if (goalsResult.status === "fulfilled") {
+        setGoals(goalsResult.value.data.goals);
+      } else {
+        throw goalsResult.reason;
+      }
     } catch (err) {
       if (
         err instanceof Error &&
@@ -212,6 +246,51 @@ export default function TrashPage() {
       setBusyTaskId(null);
     }
   }
+
+  async function handleRestoreGoal(goalId: string) {
+    setBusyGoalId(goalId);
+    setError("");
+
+    try {
+      await apiRequest(`/goals/${goalId}/restore`, {
+        method: "POST",
+      });
+      await loadTrash();
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Unable to restore goal.",
+      );
+    } finally {
+      setBusyGoalId(null);
+    }
+  }
+
+  async function handlePermanentDeleteGoal(goalId: string) {
+    const confirmed = window.confirm(
+      "Permanently delete this goal? This action cannot be undone.",
+    );
+
+    if (!confirmed) return;
+
+    setBusyGoalId(goalId);
+    setError("");
+
+    try {
+      await apiRequest(`/goals/${goalId}/permanent`, {
+        method: "DELETE",
+      });
+      await loadTrash();
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Unable to permanently delete goal.",
+      );
+    } finally {
+      setBusyGoalId(null);
+    }
+  }
+
 
   async function handleEmptyTrash() {
     if (tasks.length === 0) return;
@@ -311,7 +390,7 @@ export default function TrashPage() {
               Trash
             </h1>
             <p className="mt-2 text-sm text-muted">
-              Deleted tasks from {activeSpace?.name ?? "your space"}.
+              Deleted tasks and goals from {activeSpace?.name ?? "your space"}.
               Restore them or permanently remove them.
             </p>
           </div>
@@ -347,6 +426,7 @@ export default function TrashPage() {
             <div>
               <h2 className="text-lg font-semibold">Deleted tasks</h2>
               <p className="mt-1 text-sm text-muted">
+                {tasks.length + goals.length}{" "}
                 {tasks.length} {tasks.length === 1 ? "item" : "items"}
               </p>
             </div>
@@ -357,7 +437,7 @@ export default function TrashPage() {
             <p className="py-12 text-center text-sm text-muted">
               Loading Trash…
             </p>
-          ) : tasks.length === 0 ? (
+          ) : tasks.length === 0 && goals.length===0? (
             <div className="flex flex-col items-center py-12 text-center">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-secondary text-muted">
                 <Trash2 size={22} />
@@ -424,6 +504,86 @@ export default function TrashPage() {
                       <span className="hidden sm:inline">
                         Delete forever
                       </span>
+                      <span className="sm:hidden">Delete</span>
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-border bg-surface p-5 sm:p-7">
+          <div className="flex items-center justify-between gap-3 border-b border-border pb-4">
+            <div>
+              <h2 className="text-lg font-semibold">Deleted goals</h2>
+              <p className="mt-1 text-sm text-muted">
+                {goals.length} {goals.length === 1 ? "goal" : "goals"}
+              </p>
+            </div>
+            <Trash2 size={20} className="text-muted" />
+          </div>
+
+          {goals.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted">
+              No deleted goals in this space.
+            </p>
+          ) : (
+            <div className="divide-y divide-border">
+              {goals.map((goal) => (
+                <article
+                  key={goal._id}
+                  className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center"
+                >
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                    style={{
+                      backgroundColor: `${goal.color || "#6366f1"}18`,
+                      color: goal.color || "#6366f1",
+                    }}
+                  >
+                    <Trash2 size={18} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <h3 className="break-words text-sm font-medium">{goal.name}</h3>
+                    {goal.description && (
+                      <p className="mt-1 line-clamp-2 text-sm text-muted">
+                        {goal.description}
+                      </p>
+                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+                      <span className="rounded-md bg-surface-secondary px-2 py-1">
+                        Goal · {goal.status.replace("_", " ")}
+                      </span>
+                      {goal.deletedAt && (
+                        <span>
+                          Deleted {new Date(goal.deletedAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleRestoreGoal(goal._id)}
+                      disabled={isBusy || busyGoalId !== null}
+                      className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-surface-secondary disabled:cursor-wait disabled:opacity-50"
+                    >
+                      <RotateCcw size={15} />
+                      Restore
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void handlePermanentDeleteGoal(goal._id)}
+                      disabled={isBusy || busyGoalId !== null}
+                      aria-label={`Permanently delete goal ${goal.name}`}
+                      className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-500 transition-colors hover:bg-red-500/10 disabled:cursor-wait disabled:opacity-50"
+                    >
+                      <Trash2 size={15} />
+                      <span className="hidden sm:inline">Delete forever</span>
                       <span className="sm:hidden">Delete</span>
                     </button>
                   </div>

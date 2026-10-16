@@ -764,3 +764,36 @@ export async function restoreGoal(
 
   return goal;
 }
+
+export async function permanentlyDeleteGoal(
+  ownerId: string,
+  goalId: string,
+) {
+  if (!mongoose.isValidObjectId(ownerId)) {
+    throw new Error("Invalid user ID.");
+  }
+
+  if (!mongoose.isValidObjectId(goalId)) {
+    throw new Error("Invalid goal ID.");
+  }
+
+  const goal = await Goal.findOneAndDelete({
+    _id: goalId,
+    ownerId,
+    deletedAt: { $ne: null },
+  });
+
+  if (!goal) {
+    throw new Error("Deleted goal not found or access denied.");
+  }
+
+  // Permanently remove goals nested beneath this goal from Trash too.
+  await Goal.deleteMany({
+    ownerId,
+    spaceId: goal.spaceId,
+    parentGoalId: goal._id,
+    deletedAt: { $ne: null },
+  });
+
+  return goal;
+}
