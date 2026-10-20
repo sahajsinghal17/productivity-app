@@ -9,6 +9,8 @@ import {
   CalendarDays,
   X,
   CircleAlert,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import {
@@ -126,6 +128,10 @@ export default function ProjectsPage() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
   const [projectDescription, setProjectDescription] = useState("");
   const [projectStatus, setProjectStatus] =
     useState<ProjectStatus>("planning");
@@ -347,6 +353,108 @@ export default function ProjectsPage() {
       );
     } finally {
       setIsCreating(false);
+    }
+  }
+
+  function openEditProject(project: Project) {
+    setEditingProject(project);
+    setProjectName(project.name);
+    setProjectDescription(project.description);
+    setProjectStatus(project.status);
+    setProjectColor(project.color);
+    setProjectStartDate(
+      project.startDate ? project.startDate.slice(0, 10) : "",
+    );
+    setProjectDueDate(
+      project.dueDate ? project.dueDate.slice(0, 10) : "",
+    );
+    setEditError("");
+  }
+
+  function closeEditProject() {
+    if (isSavingEdit) return;
+
+    setEditingProject(null);
+    setEditError("");
+    resetCreateForm();
+  }
+
+  async function handleEditProject(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!editingProject) return;
+
+    if (
+      projectStartDate &&
+      projectDueDate &&
+      projectDueDate < projectStartDate
+    ) {
+      setEditError("Due date cannot be before the start date.");
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setEditError("");
+
+    try {
+      await apiRequest<ProjectResponse>(
+        `/projects/${encodeURIComponent(editingProject._id)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            name: projectName.trim(),
+            description: projectDescription.trim(),
+            status: projectStatus,
+            color: projectColor,
+            startDate: projectStartDate || null,
+            dueDate: projectDueDate || null,
+          }),
+        },
+      );
+
+      setEditingProject(null);
+      resetCreateForm();
+      await loadProjects();
+    } catch (error) {
+      setEditError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update the project.",
+      );
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
+
+  async function handleDeleteProject(project: Project) {
+    const confirmed = window.confirm(
+      `Move "${project.name}" to Trash? You can restore it later.`,
+    );
+
+    if (!confirmed) return;
+
+    setDeletingProjectId(project._id);
+    setProjectError("");
+
+    try {
+      await apiRequest(
+        `/projects/${encodeURIComponent(project._id)}`,
+        { method: "DELETE" },
+      );
+
+      setProjects((current) =>
+        current.filter((item) => item._id !== project._id),
+      );
+    } catch (error) {
+      setProjectError(
+        error instanceof Error
+          ? error.message
+          : "Unable to move the project to Trash.",
+      );
+    } finally {
+      setDeletingProjectId(null);
     }
   }
 
@@ -588,9 +696,38 @@ export default function ProjectsPage() {
                       </span>
                     </div>
 
-                    <h2 className="mt-4 break-words text-lg font-semibold text-slate-900 dark:text-white">
-                      {project.name}
-                    </h2>
+                    <div className="mt-4 flex items-start justify-between gap-3">
+                      <h2 className="break-words text-lg font-semibold text-slate-900 dark:text-white">
+                        {project.name}
+                      </h2>
+
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          aria-label={`Edit ${project.name}`}
+                          title="Edit project"
+                          onClick={() => openEditProject(project)}
+                          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          aria-label={`Move ${project.name} to Trash`}
+                          title="Move to Trash"
+                          disabled={deletingProjectId === project._id}
+                          onClick={() => void handleDeleteProject(project)}
+                          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-wait disabled:opacity-50 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                        >
+                          {deletingProjectId === project._id ? (
+                            <span className="text-xs">…</span>
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
 
                     <p className="mt-2 min-h-10 whitespace-pre-wrap break-words text-sm leading-5 text-slate-500 dark:text-slate-400">
                       {project.description || "No description yet."}
@@ -626,7 +763,7 @@ export default function ProjectsPage() {
         )}
       </main>
 
-      {isCreateOpen && (
+      {(isCreateOpen || editingProject) && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4"
           onMouseDown={(event) => {
@@ -650,7 +787,7 @@ export default function ProjectsPage() {
                   id="create-project-title"
                   className="text-lg font-semibold text-slate-900 dark:text-white"
                 >
-                  Create a project
+                  {editingProject ? "Edit project" : "Create a project"}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                   Give your project a name and a few details.
@@ -659,7 +796,7 @@ export default function ProjectsPage() {
               <button
                 type="button"
                 aria-label="Close dialog"
-                onClick={() => setIsCreateOpen(false)}
+                onClick={editingProject ? closeEditProject : () => setIsCreateOpen(false)}
                 disabled={isCreating}
                 className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-slate-800"
               >
@@ -667,7 +804,10 @@ export default function ProjectsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateProject} className="space-y-4">
+            <form
+              onSubmit={editingProject ? handleEditProject : handleCreateProject}
+              className="space-y-4"
+            >
               <div>
                 <label
                   htmlFor="project-name"
@@ -804,8 +944,8 @@ export default function ProjectsPage() {
               <div className="flex justify-end gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setIsCreateOpen(false)}
-                  disabled={isCreating}
+                  onClick={editingProject ? closeEditProject : () => setIsCreateOpen(false)}
+                  disabled={isCreating || isSavingEdit}
                   className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   Cancel
@@ -815,7 +955,13 @@ export default function ProjectsPage() {
                   disabled={isCreating || !activeSpaceId}
                   className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isCreating ? "Creating…" : "Create project"}
+                  {editingProject
+                  ? isSavingEdit
+                    ? "Saving…"
+                    : "Save changes"
+                  : isCreating
+                    ? "Creating…"
+                    : "Create project"}
                 </button>
               </div>
             </form>
