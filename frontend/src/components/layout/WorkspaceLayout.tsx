@@ -17,6 +17,7 @@ import {
   Search,
   Settings2,
   X,
+  FileUp,
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 
@@ -51,6 +52,7 @@ const navigation = [
   { label: "My Day", href: "/", icon: CheckSquare },
   { label: "Calendar", href: "/calendar", icon: CalendarDays },
   { label: "Projects", href: "/projects", icon: FolderKanban },
+  { label: "Resources", href: "/resources", icon: FileUp },
   { label: "Goals", href: "/goals", icon: Goal },
 ];
 

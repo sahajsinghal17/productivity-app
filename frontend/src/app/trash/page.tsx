@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RotateCcw, Trash2 } from "lucide-react";
+import { RotateCcw, Trash2, FileUp } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import type { Task } from "@/types/task";
 import {
@@ -42,6 +42,31 @@ type GoalsTrashResponse = {
   data: { goals: DeletedGoal[] };
 };
 
+type DeletedResource = {
+  id: string;
+  homeSpaceId: string;
+  displayName: string;
+  originalFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: "available" | "trashed";
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ResourcesTrashResponse = {
+  status: string;
+  data: {
+    resources: DeletedResource[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  };
+};
+
 export default function TrashPage() {
   const router = useRouter();
 
@@ -60,6 +85,8 @@ export default function TrashPage() {
   const [error, setError] = useState("");
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
+  const [resources, setResources] = useState<DeletedResource[]>([]);
+  const [busyResourceId, setBusyResourceId] = useState<string | null>(null);
 
   const isBusy = busyTaskId !== null || isEmptyingTrash;
 
@@ -134,16 +161,27 @@ export default function TrashPage() {
     setError("");
 
     try {
-      const [tasksResult, goalsResult] = await Promise.allSettled([
-      apiRequest<TrashResponse>(
-        `/tasks/trash?spaceId=${encodeURIComponent(activeSpaceId)}`,
-        { cache: "no-store" },
-      ),
-      apiRequest<GoalsTrashResponse>(
-        `/goals/trash?spaceId=${encodeURIComponent(activeSpaceId)}`,
-        { cache: "no-store" },
-      ),
+      const [tasksResult, goalsResult, resourcesResult] =
+        await Promise.allSettled([
+          apiRequest<TrashResponse>(
+            `/tasks/trash?spaceId=${encodeURIComponent(activeSpaceId)}`,
+            { cache: "no-store" },
+          ),
+          apiRequest<GoalsTrashResponse>(
+            `/goals/trash?spaceId=${encodeURIComponent(activeSpaceId)}`,
+            { cache: "no-store" },
+          ),
+          apiRequest<ResourcesTrashResponse>(
+            `/resources?spaceId=${encodeURIComponent(activeSpaceId)}&status=trashed`,
+            { cache: "no-store" },
+          ),
       ]);
+
+      if (resourcesResult.status === "fulfilled") {
+        setResources(resourcesResult.value.data.resources);
+      } else {
+        throw resourcesResult.reason;
+      }
 
       if (tasksResult.status === "fulfilled") {
         setTasks(tasksResult.value.data.tasks);
@@ -288,6 +326,59 @@ export default function TrashPage() {
       );
     } finally {
       setBusyGoalId(null);
+    }
+  }
+
+  async function handleRestoreResource(resourceId: string) {
+    setBusyResourceId(resourceId);
+    setError("");
+
+    try {
+      await apiRequest(`/resources/${encodeURIComponent(resourceId)}/restore`, {
+        method: "POST",
+      });
+
+      setResources((current) =>
+        current.filter((resource) => resource.id !== resourceId),
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to restore this resource.",
+      );
+    } finally {
+      setBusyResourceId(null);
+    }
+  }
+
+  async function handlePermanentDeleteResource(resource: DeletedResource) {
+    const confirmed = window.confirm(
+      `Permanently delete "${resource.displayName}"? This cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    setBusyResourceId(resource.id);
+    setError("");
+
+    try {
+      await apiRequest(
+        `/resources/${encodeURIComponent(resource.id)}/permanent`,
+        { method: "DELETE" },
+      );
+
+      setResources((current) =>
+        current.filter((item) => item.id !== resource.id),
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to permanently delete this resource.",
+      );
+    } finally {
+      setBusyResourceId(null);
     }
   }
 
@@ -592,6 +683,79 @@ export default function TrashPage() {
             </div>
           )}
         </section>
+
+
+        <section className="mt-6 rounded-2xl border border-border bg-surface p-5 sm:p-7">
+          <div className="flex items-center justify-between gap-3 border-b border-border pb-4">
+            <div>
+              <h2 className="text-lg font-semibold">Deleted resources</h2>
+              <p className="mt-1 text-sm text-muted">
+                {resources.length} {resources.length === 1 ? "file" : "files"}
+              </p>
+            </div>
+            <FileUp size={20} className="text-muted" />
+          </div>
+
+          {isLoading || isLoadingSpaces ? (
+            <p className="py-8 text-center text-sm text-muted">
+              Loading resources…
+            </p>
+          ) : resources.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted">
+              No deleted resources in this space.
+            </p>
+          ) : (
+            <div className="divide-y divide-border">
+              {resources.map((resource) => (
+                <article
+                  key={resource.id}
+                  className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted">
+                    <FileUp size={18} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <h3 className="break-words text-sm font-medium">
+                      {resource.displayName}
+                    </h3>
+                    <p className="mt-1 truncate text-sm text-muted">
+                      {resource.originalFilename} · {resource.mimeType}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      {(resource.sizeBytes / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleRestoreResource(resource.id)}
+                      disabled={busyResourceId !== null}
+                      className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-surface-secondary disabled:cursor-wait disabled:opacity-50"
+                    >
+                      <RotateCcw size={15} />
+                      Restore
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void handlePermanentDeleteResource(resource)}
+                      disabled={busyResourceId !== null}
+                      aria-label={`Permanently delete ${resource.displayName}`}
+                      className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-500 transition-colors hover:bg-red-500/10 disabled:cursor-wait disabled:opacity-50"
+                    >
+                      <Trash2 size={15} />
+                      <span className="hidden sm:inline">Delete forever</span>
+                      <span className="sm:hidden">Delete</span>
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
       </main>
     </WorkspaceLayout>
   );

@@ -16,6 +16,7 @@ import {
   type WorkspaceSpace,
   type WorkspaceUser,
 } from "@/components/layout/WorkspaceLayout";
+import { ResourceAttachments } from "@/components/resources/ResourceAttachments";
 
 type ProjectStatus =
   | "planning"
@@ -611,6 +612,12 @@ export default function ProjectsPage() {
                         )}
                       </div>
                     )}
+
+                    <ResourceAttachments
+                      targetType="project"
+                      targetId={project._id}
+                      activeSpaceId={activeSpaceId}
+                    />
                   </div>
                 </article>
               );

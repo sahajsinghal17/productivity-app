@@ -371,6 +371,7 @@ export default function Home() {
                 onToggleTask={(task) => void handleToggleTask(task)}
                 onDeleteTask={(task) => void handleDeleteTask(task)}
                 onAddTask={() => setIsQuickAddOpen(true)}
+                activeSpaceId={activeSpaceId}
               />
             </div>
           )}

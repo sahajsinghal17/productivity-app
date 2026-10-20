@@ -3,6 +3,7 @@
 
 import { CheckSquare, Trash2 } from "lucide-react";
 import type { Task } from "@/types/task";
+import { ResourceAttachments } from "@/components/resources/ResourceAttachments";
 
 type TaskListProps = {
   tasks: Task[];
@@ -10,6 +11,7 @@ type TaskListProps = {
   onToggleTask: (task: Task) => void;
   onDeleteTask: (task: Task) => void;
   onAddTask: () => void;
+  activeSpaceId: string;
 };
 
 export function TaskList({
@@ -17,7 +19,8 @@ export function TaskList({
   isUpdatingTaskId,
   onToggleTask,
   onDeleteTask,
-  onAddTask
+  onAddTask,
+  activeSpaceId,
 }: TaskListProps) {
   
     if (tasks.length === 0) {
@@ -109,6 +112,12 @@ export function TaskList({
                 <span className="text-xs text-muted">Cancelled</span>
               )}
             </div>
+
+            <ResourceAttachments
+              targetType="task"
+              targetId={task._id}
+              activeSpaceId={activeSpaceId}
+            />
           </div>
 
           <button

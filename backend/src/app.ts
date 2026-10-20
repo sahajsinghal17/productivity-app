@@ -9,6 +9,7 @@ import spaceRoutes from "./routes/space.routes.js";
 import session from "express-session";
 import projectRoutes from "./routes/project.routes.js";
 import goalRoutes from "./routes/goal.routes.js";
+import resourceRoutes from "./routes/resource.routes.js";
 
 const app = express();
 
@@ -48,5 +49,6 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/spaces", spaceRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/goals", goalRoutes);
+app.use("/api/resources", resourceRoutes);
 
 export default app;
