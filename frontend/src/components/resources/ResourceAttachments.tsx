@@ -78,6 +78,7 @@ export function ResourceAttachments({
   const [busyResourceId, setBusyResourceId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [selectedResourceId, setSelectedResourceId] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!targetId) return;
@@ -116,7 +117,7 @@ export function ResourceAttachments({
     return () => {
       cancelled = true;
     };
-  }, [targetType, targetId]);
+  }, [targetType, targetId, refreshKey]);
 
   useEffect(() => {
     if (!isExpanded || !activeSpaceId) return;

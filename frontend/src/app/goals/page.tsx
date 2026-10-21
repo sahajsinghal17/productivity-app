@@ -11,10 +11,11 @@ import {
   CircleDashed,
   Goal as GoalIcon,
   LoaderCircle,
-  MoreHorizontal,
+  Pencil,
   Plus,
   Search,
   Target,
+  Trash2,
   X,
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
@@ -688,35 +689,35 @@ export default function GoalsPage() {
                         </div>
 
                         
-                        <div className="flex shrink-0 items-center gap-2">
-                            <span
-                                className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[goal.status]}`}
-                            >
-                                {getStatusLabel(goal.status)}
-                            </span>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[goal.status]}`}
+                          >
+                            {getStatusLabel(goal.status)}
+                          </span>
 
-                            <button
-                                type="button"
-                                onClick={() => handleEditGoal(goal)}
-                                className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium transition hover:bg-surface-secondary"
-                                aria-label={`Edit ${goal.name}`}
-                            >
-                                Edit
-                            </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditGoal(goal)}
+                            className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-secondary hover:text-foreground"
+                            aria-label={`Edit ${goal.name}`}
+                            title="Edit goal"
+                          >
+                            <Pencil size={16} />
+                          </button>
 
-
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setDeleteError("");
-                                    setDeletingGoal(goal);
-                                }}
-                                className="rounded-lg border border-red-500/30 px-2.5 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-500/10 dark:text-red-400"
-                                aria-label={`Delete ${goal.name}`}
-                                >
-                                Delete
-                            </button>
-
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeleteError("");
+                              setDeletingGoal(goal);
+                            }}
+                            className="rounded-lg p-2 text-muted transition-colors hover:bg-red-500/10 hover:text-red-500"
+                            aria-label={`Delete ${goal.name}`}
+                            title="Move to Trash"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
 
                       </div>

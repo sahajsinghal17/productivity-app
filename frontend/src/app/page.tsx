@@ -36,6 +36,16 @@ export default function Home() {
   } = useTasks(activeSpaceId);
 
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [availableResources, setAvailableResources] = useState<
+    {
+      id: string;
+      displayName: string;
+      sizeBytes: number;
+      mimeType: string;
+    }[]
+  >([]);
+  const [selectedResourceIds, setSelectedResourceIds] = useState<string[]>([]);
+  const [isLoadingResources, setIsLoadingResources] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState<
     "low" | "medium" | "high" | "urgent"
@@ -152,9 +162,24 @@ export default function Home() {
         }),
       });
 
-      setTasks((currentTasks) => [response.data.task, ...currentTasks]);
+      for (const resourceId of selectedResourceIds) {
+        await apiRequest(
+          `/resources/${encodeURIComponent(resourceId)}/attachments`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              targetType: "task",
+              targetId: response.data.task._id,
+            }),
+          },
+        );
+      }
+
+setTasks((currentTasks) => [response.data.task, ...currentTasks]);
+
       setNewTaskTitle("");
       setNewTaskPriority("medium");
+      setSelectedResourceIds([]);
       setIsQuickAddOpen(false);
     } catch (error) {
       setQuickAddError(
@@ -165,6 +190,58 @@ export default function Home() {
     }
   }
 
+  useEffect(() => {
+    if (!isQuickAddOpen || !activeSpaceId) {
+      setAvailableResources([]);
+      setSelectedResourceIds([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadAvailableResources() {
+      setIsLoadingResources(true);
+
+      try {
+        const response = await apiRequest<{
+          status: string;
+          data: {
+            resources: {
+              id: string;
+              displayName: string;
+              sizeBytes: number;
+              mimeType: string;
+            }[];
+          };
+        }>(
+          `/resources?spaceId=${encodeURIComponent(activeSpaceId)}`,
+          { cache: "no-store" },
+        );
+
+        if (!cancelled) {
+          setAvailableResources(response.data.resources);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setQuickAddError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load resources.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingResources(false);
+        }
+      }
+    }
+
+    void loadAvailableResources();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isQuickAddOpen, activeSpaceId]);
 
   if (isCheckingAuth) {
     return (
@@ -290,6 +367,47 @@ export default function Home() {
                   <option value="high">High</option>
                   <option value="urgent">Urgent</option>
                 </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="quick-add-resources"
+                  className="mb-2 block text-sm font-medium"
+                >
+                  Attach resources
+                </label>
+
+                {isLoadingResources ? (
+                  <p className="text-sm text-muted">Loading resources…</p>
+                ) : availableResources.length === 0 ? (
+                  <p className="text-sm text-muted">
+                    No available resources in this space. Upload files in the Resource Library first.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <select
+                      id="quick-add-resources"
+                      multiple
+                      value={selectedResourceIds}
+                      onChange={(event) =>
+                        setSelectedResourceIds(
+                          Array.from(event.target.selectedOptions, (option) => option.value),
+                        )
+                      }
+                      className="min-h-24 w-full rounded-xl border border-border bg-surface px-3 py-3 text-sm outline-none focus:border-accent"
+                    >
+                      {availableResources.map((resource) => (
+                        <option key={resource.id} value={resource.id}>
+                          {resource.displayName}
+                        </option>
+                      ))}
+                    </select>
+
+                    <p className="text-xs text-muted">
+                      Hold Ctrl (Windows/Linux) or Command (Mac) to select multiple files.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {quickAddError && (
